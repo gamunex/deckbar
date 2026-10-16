@@ -17,6 +17,9 @@ Eine Touch-Leiste unter dem Monitor im Stil eines Stream Deck, gebaut auf dem Wa
   Event-Timer, Namenseffekt) und nach jedem Dungeon-Run ein Bild mit dem Schaden pro Boss nach Discord
 - **Discord-Bot:** Gruppen-DPS und Run-Ergebnisse an einen Bot, der Meldungen mehrerer Spieler zusammenführt
 - **Verbindung** per WLAN, bei Bedarf per USB-Kabel als Rückfall
+- **Ruhemodus:** Ist 30 s lang kein PC verbunden (weder WLAN noch USB), blendet das Display aus und
+  geht wieder an, sobald der Daemon da ist. Eine Berührung zeigt kurz den Verbindungsstatus
+  (`DECKBAR_SLEEP_AFTER_S`, `DECKBAR_SLEEP_PEEK_S` in `firmware/include/deckbar_config.h`)
 - **Web-UI** mit Dashboard und einer Seite je Modul, Leisten-Editor mit Drag & Drop und
   Live-Vorschau, dazu ein SDL-Simulator zum Testen ohne Gerät
 - **Modular:** Jeder Teil (Touch-Leiste, AION-2-Mitschnitt, Overlay, Runs, Discord-Bot, Updates)

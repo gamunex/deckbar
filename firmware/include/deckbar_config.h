@@ -1,7 +1,7 @@
 #pragma once
 /* Einstellungen der NexBoard-Firmware. Zugangsdaten stehen in secrets.h (gitignored). */
 
-#define DECKBAR_FW_VERSION "0.4.0"
+#define DECKBAR_FW_VERSION "0.5.0"
 
 /*
  * Ausrichtung im Querformat. 270 entspricht der Drehung aus dem Waveshare-Beispiel
@@ -36,6 +36,16 @@
 #define DECKBAR_TOUCH_GHOST_X2 0
 #define DECKBAR_TOUCH_GHOST_Y1 1
 #define DECKBAR_TOUCH_GHOST_Y2 0
+#endif
+
+/* Ruhemodus: Display aus, wenn so lange kein PC verbunden ist (weder WLAN noch USB). 0 = nie.
+ * Wach wird es sofort, sobald der Daemon wieder da ist, oder kurz bei einer Berührung. */
+#ifndef DECKBAR_SLEEP_AFTER_S
+#define DECKBAR_SLEEP_AFTER_S 30
+#endif
+/* So lange bleibt die Statusanzeige nach einer Berührung im Ruhemodus an. */
+#ifndef DECKBAR_SLEEP_PEEK_S
+#define DECKBAR_SLEEP_PEEK_S 15
 #endif
 
 #define DECKBAR_DEFAULT_PORT 8765

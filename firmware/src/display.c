@@ -153,6 +153,8 @@ static void backlight_off_early(void)
 #endif
 }
 
+static uint8_t bl_level; /* zuletzt gesetzte Helligkeit, 0 = aus */
+
 void display_set_brightness(uint8_t level)
 {
     /* Waveshare: LCD_PWM_MODE_x = 0xff - x, d. h. Tastverhältnis invertiert */
@@ -185,6 +187,31 @@ static void backlight_on(uint8_t level)
     };
     ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_timer_config(&t));
     ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_channel_config(&ch));
+    bl_level = level;
+}
+
+void display_fade_backlight(uint8_t target, uint32_t ms)
+{
+#if !DECKBAR_BOARD_V1
+    if (target > 0 && bl_level == 0) esp_io_expander_set_level(expander, BOARD_EXIO_BL_EN, 1);
+#endif
+    int from = bl_level;
+    int steps = ms / 10 > 0 ? (int)(ms / 10) : 1;
+    for (int i = 1; i <= steps; i++) {
+        /* Smoothstep, damit Anfang und Ende weich auslaufen */
+        float t = (float)i / steps;
+        float e = t * t * (3.0f - 2.0f * t);
+        display_set_brightness((uint8_t)(from + (target - from) * e + 0.5f));
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    bl_level = target;
+    /* Ganz abschalten: Tastverhältnis 255/256 lässt sonst einen schwachen Schimmer.
+     * display_set_brightness() schaltet das PWM beim Einblenden wieder ein. */
+#if DECKBAR_BOARD_V1
+    if (target == 0) ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 1); /* V1: High = dunkel */
+#else
+    if (target == 0) esp_io_expander_set_level(expander, BOARD_EXIO_BL_EN, 0);
+#endif
 }
 
 /* ------------------------------------------------------------------ Übertragung */
@@ -314,6 +341,25 @@ static void flush_cb(lv_display_t *d, const lv_area_t *area, uint8_t *px_map)
 /* Lesen dauert bei 300 kHz ~1,5 ms; ein hängender Bus soll den LVGL-Task nicht 50 ms blockieren */
 #define TOUCH_I2C_TIMEOUT_MS 10
 
+/* Ruhemodus: Berührungen gehen nicht an LVGL, sondern wecken nur auf. Der Finger, der geweckt hat,
+ * wird bis zum Loslassen verschluckt, damit er keine Kachel auslöst. */
+static volatile bool input_blocked;
+static volatile bool touch_wake;
+static bool swallow;
+
+void display_block_input(bool on)
+{
+    input_blocked = on;
+    if (on) touch_wake = false;
+}
+
+bool display_take_touch_wake(void)
+{
+    bool w = touch_wake;
+    touch_wake = false;
+    return w;
+}
+
 static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
     (void)indev;
@@ -413,6 +459,14 @@ static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
     }
     data->point = last_pt;
     data->state = pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+    if (input_blocked && pressed) {
+        touch_wake = true;
+        swallow = true;
+    }
+    if (swallow) {
+        if (!pressed) swallow = false;
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
 #if DECKBAR_TOUCH_DEBUG
     static bool was;
     if (pressed != was) log_printf("P %s raw=(%d,%d) -> (%d,%d)\n", pressed ? "down" : "up", raw_x, raw_y,

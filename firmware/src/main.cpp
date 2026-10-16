@@ -169,11 +169,59 @@ static uint32_t tick_cb(void)
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+/* ------------------------------------------------------------------ Ruhemodus
+ * Ist DECKBAR_SLEEP_AFTER_S lang kein Daemon angemeldet (egal ob über WLAN oder USB), blendet das
+ * Display aus und LVGL zeichnet nicht mehr. WLAN und USB suchen dabei weiter. Sobald der Daemon
+ * wieder da ist, blendet es ein. Eine Berührung weckt es für DECKBAR_SLEEP_PEEK_S, damit man den
+ * Verbindungsstatus sehen kann; diese Berührung löst nichts aus. */
+static lv_display_t *disp;
+#if DECKBAR_SLEEP_AFTER_S > 0
+static bool asleep;
+static uint32_t offline_since; /* 0 = gerade online */
+static uint32_t peek_until;    /* 0 = kein Aufwachen per Berührung aktiv */
+
+/* Unter lvgl_mux aufrufen. Rückgabe: 1 = einblenden, -1 = ausblenden, 0 = nichts tun. */
+static int sleep_check(void)
+{
+    uint32_t now = millis();
+    bool online = deckbar_ui_net_state() == DECKBAR_NET_ONLINE;
+    if (online) {
+        offline_since = 0;
+        peek_until = 0;
+    } else if (!offline_since) {
+        offline_since = now ? now : 1;
+    }
+
+    if (asleep) {
+        bool touched = display_take_touch_wake();
+        if (!online && !touched) return 0;
+        asleep = false;
+        peek_until = online ? 0 : now + DECKBAR_SLEEP_PEEK_S * 1000u;
+        display_block_input(false);
+        lv_display_enable_invalidation(disp, true);
+        lv_obj_invalidate(lv_screen_active());
+        log_printf("Ruhemodus aus (%s)\n", online ? "PC verbunden" : "Berührung");
+        return 1;
+    }
+
+    if (online) return 0;
+    bool long_offline = now - offline_since >= DECKBAR_SLEEP_AFTER_S * 1000u;
+    bool peek_over = !peek_until || (int32_t)(now - peek_until) >= 0;
+    if (!long_offline || !peek_over) return 0;
+    asleep = true;
+    display_block_input(true);
+    lv_display_enable_invalidation(disp, false); /* letztes Bild bleibt beim Ausblenden stehen */
+    log_printf("Ruhemodus an: seit %lu s kein PC verbunden\n", (unsigned long)((now - offline_since) / 1000));
+    return -1;
+}
+#endif
+
 static void lvgl_task(void *arg)
 {
     bool backlight = false;
     for (;;) {
         uint32_t delay_ms = 5;
+        int fade = 0;
         if (xSemaphoreTake(lvgl_mux, portMAX_DELAY) == pdTRUE) {
             net_ev_t ev;
             while (xQueueReceive(q_in, &ev, 0) == pdTRUE) {
@@ -192,6 +240,9 @@ static void lvgl_task(void *arg)
                 }
                 free(ev.data);
             }
+#if DECKBAR_SLEEP_AFTER_S > 0
+            if (backlight) fade = sleep_check();
+#endif
             delay_ms = lv_timer_handler();
             xSemaphoreGive(lvgl_mux);
         }
@@ -200,6 +251,12 @@ static void lvgl_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(60));
             display_backlight_on();
             backlight = true;
+        }
+        if (fade > 0) {
+            vTaskDelay(pdMS_TO_TICKS(40)); /* neu gezeichneten Frame erst ins Panel lassen */
+            display_fade_backlight(DECKBAR_BRIGHTNESS, 250);
+        } else if (fade < 0) {
+            display_fade_backlight(0, 800);
         }
         if (delay_ms > 30) delay_ms = 30;
         if (delay_ms < 2) delay_ms = 2;
@@ -485,7 +542,7 @@ void setup()
     lv_init();
     lv_log_register_print_cb([](lv_log_level_t, const char *buf) { log_printf("%s", buf); });
     lv_tick_set_cb(tick_cb);
-    display_init();
+    disp = display_init();
 
     static deckbar_config_t cfg = {
         .token = DECKBAR_TOKEN,
