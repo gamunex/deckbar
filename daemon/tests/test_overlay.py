@@ -39,6 +39,31 @@ async def test_update_saves_and_publishes(tmp_path):
     assert Overlay(tmp_path).layout.widgets.boss.x == 100
 
 
+async def test_autohide_geht_sofort_ans_laufende_programm(tmp_path):
+    """Nur ein Wechsel von hide_unfocused schickt einen Befehl über den Socket (hier ein Fake im
+    Test-Laufzeitordner aus conftest.py); ohne laufendes Programm wird nur gespeichert."""
+    from deckbar_daemon.overlay import socket_path
+    o = Overlay(tmp_path, manage_unit=False)
+    assert o.layout.hide_unfocused
+    await o.update({"hide_unfocused": False})  # kein Socket: kein Fehler
+    got: list[bytes] = []
+
+    async def conn(reader, writer):
+        got.append(await reader.read())
+        writer.close()
+
+    socket_path().parent.mkdir(parents=True, exist_ok=True)
+    server = await asyncio.start_unix_server(conn, str(socket_path()))
+    async with server:
+        await o.update({"fx": "gold"})
+        await o.update({"hide_unfocused": True})
+        for _ in range(50):
+            if got:
+                break
+            await asyncio.sleep(0.01)
+    assert got == [b"autohide-on\n"]
+
+
 async def test_unit_untouched_for_test_instances(tmp_path):
     o = Overlay(tmp_path, manage_unit=False)
     code, out = await o._systemctl("enable", "--now", "deckbar-overlay.service")

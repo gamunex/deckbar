@@ -52,6 +52,7 @@ function controlTab(ctx) {
             field("Monitor", select(screens, L.screen, (v) => { L.screen = v; save({ screen: v }); }), "Wirkt nach „Neu starten“."),
             field("Beim Start", select({ click: "Meter bedienbar", lock: "Gesperrt (alles klickt durch)" }, L.start_mode, (v) => { L.start_mode = v; save({ start_mode: v }); })),
             field("Namenseffekt", select(FX, L.fx, (v) => { L.fx = v; save({ fx: v }); }), "Auf deinem Namen in der eigenen Meter-Zeile.")),
+          settingsRow("Nur bei aktivem Spiel zeigen", "Blendet das Overlay aus, sobald ein anderes Fenster als AION 2 den Fokus hat (KDE)", sw(L.hide_unfocused, (v) => { L.hide_unfocused = v; save({ hide_unfocused: v }); })),
           settingsRow("GPU-Beschleunigung", "Aus nur bei Darstellungsfehlern; wirkt nach Neustart", sw(L.gpu, (v) => { L.gpu = v; save({ gpu: v }); })))),
       callout("info", "information-outline", el("span", {}, "Unter KDE Plasma (Wayland) liegt das Overlay als eigene Ebene über dem Vollbildspiel und nimmt nur dort Klicks an, wo das Meter ist. Ohne layer-shell (GNOME, X11) läuft automatisch das einfache Meter-Fenster.")));
   };

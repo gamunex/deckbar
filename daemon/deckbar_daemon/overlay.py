@@ -36,7 +36,8 @@ QUEUE_MAX = 32
 GAME_POLL_S = 5
 GAME_GRACE_S = 30  # Spiel weg: so lange warten (Absturz mit Neustart, Ladebildschirm)
 UNIT_POLL_S = 30   # Dienststatus fürs Dashboard auffrischen (nur mit Spiel oder offener Web-UI)
-COMMANDS = ("toggle", "show", "hide", "edit", "lock", "click", "reload", "details", "history", "settings")
+COMMANDS = ("toggle", "show", "hide", "edit", "lock", "click", "reload", "details", "history", "settings",
+            "autohide-on", "autohide-off")
 FX = Literal["", "glanz", "brennen", "gold", "frost", "holo", "leere"]
 
 
@@ -98,6 +99,7 @@ class OverlayLayout(_Strict):
     start_mode: Literal["click", "lock"] = "click"
     fx: FX = ""  # Namenseffekt auf dem eigenen Namen in der Meter-Zeile
     gpu: bool = True  # Chromium-GPU-Compositing (unter layer-shell ohne Transparenzfehler)
+    hide_unfocused: bool = True  # Fläche nur zeigen, solange AION 2 das aktive Fenster ist (KWin)
     widgets: Widgets = Field(default_factory=Widgets)
 
 
@@ -143,7 +145,13 @@ class Overlay:
 
     async def update(self, patch: dict) -> OverlayLayout:
         layout = OverlayLayout.model_validate(merge(self.layout.model_dump(), patch))
+        autohide = layout.hide_unfocused != self.layout.hide_unfocused
         self.save(layout)
+        if autohide and socket_path().exists():
+            try:  # sofort ans laufende Programm, sonst gilt es beim nächsten Start
+                await self.command("autohide-on" if layout.hide_unfocused else "autohide-off")
+            except RuntimeError:
+                pass
         await self.publish("layout", layout.model_dump())
         for fn in self.listeners:
             await fn()

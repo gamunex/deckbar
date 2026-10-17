@@ -249,6 +249,14 @@ in den Systemeinstellungen auf eine Taste legen. Monitor (Standard: Hauptmonitor
 Startmodus, Namenseffekt und Widgets stehen in der Web-UI; das Layout liegt in
 `~/.config/deckbar/overlay/layout.json`.
 
+Unter KWin blendet sich die Fläche aus, solange ein anderes Fenster als AION 2 den Fokus hat, auch
+eines auf einem anderen Monitor (Web-UI: „Nur bei aktivem Spiel zeigen“, Befehle `--autohide-on`/`-off`).
+Dafür lädt das Programm das KWin-Skript `overlay/focus.js`, das jeden Fensterwechsel per D-Bus
+(`org.deckbar.Overlay`) meldet, und entlädt es beim Beenden. Erkannt wird das Spiel an der
+Fensterklasse `steam_app_3393110`. Eigene Fenster (Bearbeiten, Details) ändern nichts,
+im Bearbeiten-Modus bleibt die Fläche immer sichtbar, und `--show` zeigt sie bis zum nächsten
+Fensterwechsel auch ohne Spielfokus.
+
 Ohne layer-shell (GNOME, X11 oder ohne `layer-shell-qt`) startet automatisch das frühere
 Meter-Fenster unter XWayland (`--legacy`): KWin-Regel für die Ebene „Overlay“, Durchklicken per
 X11-Input-Shape, ohne die zusätzlichen Widgets.
